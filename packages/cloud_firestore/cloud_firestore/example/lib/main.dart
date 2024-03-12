@@ -13,6 +13,7 @@ import 'firebase_options.dart';
 /// Requires that a Firestore emulator is running locally.
 /// See https://firebase.flutter.dev/docs/firestore/usage#emulator-usage
 bool shouldUseFirestoreEmulator = true;
+late final FirebaseApp notDefaultApp;
 
 Future<Uint8List> loadBundleSetup(int number) async {
   // endpoint serves a bundle with 3 documents each containing
@@ -26,12 +27,17 @@ Future<Uint8List> loadBundleSetup(int number) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  FirebaseFirestore.instance.settings = const Settings(
+  notDefaultApp = await Firebase.initializeApp(
+    name: 'notDefault',
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  print(Firebase.apps);
+  FirebaseFirestore.instanceFor(app: notDefaultApp).settings = const Settings(
     persistenceEnabled: true,
   );
   if (shouldUseFirestoreEmulator) {
-    FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+    FirebaseFirestore.instanceFor(app: notDefaultApp)
+        .useFirestoreEmulator('localhost', 8080);
   }
 
   runApp(FirestoreExampleApp());
@@ -40,7 +46,7 @@ Future<void> main() async {
 /// A reference to the list of movies.
 /// We are using `withConverter` to ensure that interactions with the collection
 /// are type-safe.
-final moviesRef = FirebaseFirestore.instance
+final moviesRef = FirebaseFirestore.instanceFor(app: notDefaultApp)
     .collection('firestore-example-app')
     .withConverter<Movie>(
       fromFirestore: (snapshots, _) => Movie.fromJson(snapshots.data()!),
@@ -120,7 +126,8 @@ class _FilmListState extends State<FilmList> {
             // This is a example use for 'snapshots in sync'.
             // The view reflects the time of the last Firestore sync; which happens any time a field is updated.
             StreamBuilder(
-              stream: FirebaseFirestore.instance.snapshotsInSync(),
+              stream: FirebaseFirestore.instanceFor(app: notDefaultApp)
+                  .snapshotsInSync(),
               builder: (context, _) {
                 return Text(
                   'Latest Snapshot: ${DateTime.now()}',
@@ -170,7 +177,8 @@ class _FilmListState extends State<FilmList> {
                   return _resetLikes();
                 case 'aggregate':
                   // Count the number of movies
-                  final _count = await FirebaseFirestore.instance
+                  final _count =
+                      await FirebaseFirestore.instanceFor(app: notDefaultApp)
                       .collection('firestore-example-app')
                       .count()
                       .get();
@@ -178,7 +186,8 @@ class _FilmListState extends State<FilmList> {
                   print('Count: ${_count.count}');
 
                   // Average the number of likes
-                  final _average = await FirebaseFirestore.instance
+                  final _average =
+                      await FirebaseFirestore.instanceFor(app: notDefaultApp)
                       .collection('firestore-example-app')
                       .aggregate(average('likes'))
                       .get();
@@ -186,7 +195,8 @@ class _FilmListState extends State<FilmList> {
                   print('Average: ${_average.getAverage('likes')}');
 
                   // Sum the number of likes
-                  final _sum = await FirebaseFirestore.instance
+                  final _sum =
+                      await FirebaseFirestore.instanceFor(app: notDefaultApp)
                       .collection('firestore-example-app')
                       .aggregate(sum('likes'))
                       .get();
@@ -194,7 +204,8 @@ class _FilmListState extends State<FilmList> {
                   print('Sum: ${_sum.getSum('likes')}');
 
                   // In one query
-                  final _all = await FirebaseFirestore.instance
+                  final _all =
+                      await FirebaseFirestore.instanceFor(app: notDefaultApp)
                       .collection('firestore-example-app')
                       .aggregate(
                         average('likes'),
@@ -211,7 +222,8 @@ class _FilmListState extends State<FilmList> {
                 case 'load_bundle':
                   Uint8List buffer = await loadBundleSetup(2);
                   LoadBundleTask task =
-                      FirebaseFirestore.instance.loadBundle(buffer);
+                      FirebaseFirestore.instanceFor(app: notDefaultApp)
+                          .loadBundle(buffer);
 
                   final list = await task.stream.toList();
 
@@ -297,7 +309,8 @@ class _FilmListState extends State<FilmList> {
       ),
     );
 
-    WriteBatch batch = FirebaseFirestore.instance.batch();
+    WriteBatch batch =
+        FirebaseFirestore.instanceFor(app: notDefaultApp).batch();
 
     for (final movie in movies.docs) {
       batch.update(movie.reference, {'likes': 0});
@@ -445,7 +458,7 @@ class _LikesState extends State<Likes> {
       // We use a transaction because multiple users could update the likes count
       // simultaneously. As such, our likes count may be different from the likes
       // count on the server.
-      int newLikes = await FirebaseFirestore.instance
+      int newLikes = await FirebaseFirestore.instanceFor(app: notDefaultApp)
           .runTransaction<int>((transaction) async {
         DocumentSnapshot<Movie> movie =
             await transaction.get<Movie>(widget.reference);
